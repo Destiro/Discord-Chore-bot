@@ -1,0 +1,13 @@
+{
+  "name": "flat-chore-bot",
+  "version": "1.0.0",
+  "description": "Discord chore rotation bot for your flat",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^17.4.2"
+  }
+}

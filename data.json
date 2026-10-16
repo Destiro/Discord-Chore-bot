@@ -1,0 +1,44 @@
+{
+  "flatmates": [
+    "Jackson",
+    "Makyla",
+    "Connor",
+    "Tom"
+  ],
+  "assignments": {
+    "🍳 Kitchen": "Tom",
+    "🌿 Outdoors": "Jackson",
+    "🧹 Floors": "Makyla",
+    "🚿 Bathrooms": "Connor"
+  },
+  "completions": {
+    "🍳 Kitchen": {
+      "Empty bins (if needed)": false,
+      "Wipe down countertops (under appliances too)": false,
+      "Dishes (dishwasher and rack)": false,
+      "Wipe drawers & glass": false,
+      "Wipe down appliances": false,
+      "Replace soap/paper towels": false
+    },
+    "🌿 Outdoors": {
+      "Choose one: Mow lawns / Clean deck / Weeding & trimming bushes / Sweep paths & rake leaves / (bad weather) Mop floors": false
+    },
+    "🧹 Floors": {
+      "Dust common areas": false,
+      "Pack away forgotten cans/kitchenware": false,
+      "Clean dining room table": false,
+      "Vacuum common areas": false
+    },
+    "🚿 Bathrooms": {
+      "Refill soap/toilet paper": false,
+      "Wipe down toilet & seat": false,
+      "Clean sinks (remove mould by taps)": false,
+      "Clean toilet bowl": false,
+      "Replace toilet mat & towel": false,
+      "Clean bath": false,
+      "Wipe down shower surfaces": false
+    }
+  },
+  "weekStart": "Wed May 6 2026",
+  "rotationIndex": 0
+}

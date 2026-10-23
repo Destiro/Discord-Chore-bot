@@ -51,6 +51,7 @@ const DEFAULT_STATE = {
   rotationIndex: 0,
   history: [],
   notes: {},
+  lastAutoRotate: null,
 };
 
 function loadState() {
@@ -95,9 +96,68 @@ function rotateChores() {
   });
 
   state.weekStart = new Date().toDateString();
+  state.lastAutoRotate = getPeriodKey();
   state.history = [...state.history, { weekStart: state.weekStart, assignments: { ...state.assignments } }].slice(-HISTORY_WEEKS);
   state.rotationIndex = (state.rotationIndex + 1) % state.flatmates.length;
   saveState();
+}
+
+// ─── AUTO-ROTATION ───────────────────────────────────────────────────────────
+// Chores rotate every Monday at 9:00am New Zealand time (follows NZST/NZDT).
+const ROTATE_TZ = 'Pacific/Auckland';
+const ROTATE_HOUR = 9;
+const CHECK_INTERVAL_MS = 60 * 1000;
+
+// Date (YYYY-MM-DD) of the most recent Monday 9am NZ time, i.e. the current rotation period
+function getPeriodKey(now = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-NZ', {
+      timeZone: ROTATE_TZ, year: 'numeric', month: 'numeric', day: 'numeric',
+      weekday: 'short', hour: 'numeric', hourCycle: 'h23',
+    }).formatToParts(now).map(p => [p.type, p.value])
+  );
+  const daysSinceMonday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday);
+  const back = daysSinceMonday === 0 && Number(parts.hour) < ROTATE_HOUR ? 7 : daysSinceMonday;
+  const monday = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day) - back));
+  return monday.toISOString().slice(0, 10);
+}
+
+function buildRotateEmbed() {
+  const embed = new EmbedBuilder()
+    .setTitle('🔄 New Week — Chores Rotated!')
+    .setColor(0x57F287)
+    .setDescription(`Week of **${state.weekStart}**`)
+    .setTimestamp();
+  Object.entries(state.assignments).forEach(([chore, person]) =>
+    embed.addFields({ name: chore, value: `👤 **${person}**`, inline: true })
+  );
+  embed.setFooter({ text: `Rotation #${state.rotationIndex} • Use /checklist to tick off tasks` });
+  return embed;
+}
+
+async function checkAutoRotate() {
+  try {
+    const period = getPeriodKey();
+    // First run with auto-rotation: start from the current period instead of rotating straight away
+    if (!state.lastAutoRotate) {
+      state.lastAutoRotate = period;
+      saveState();
+      return;
+    }
+    if (state.lastAutoRotate >= period || state.flatmates.length === 0) return;
+
+    rotateChores();
+    console.log(`[${new Date().toISOString()}] 🔄 Auto-rotated chores for period ${period}`);
+
+    if (!process.env.CHANNEL_ID) {
+      console.warn('⚠️  CHANNEL_ID is not set, so the rotation was not announced.');
+      return;
+    }
+    const channel = await client.channels.fetch(process.env.CHANNEL_ID);
+    await channel.send({ embeds: [buildRotateEmbed()] });
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] Auto-rotate error:`, err);
+  }
 }
 
 function getProgressBar(done, total) {
@@ -112,6 +172,8 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once('clientReady', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+  checkAutoRotate();
+  setInterval(checkAutoRotate, CHECK_INTERVAL_MS);
 });
 
 client.on('interactionCreate', async interaction => {
@@ -158,16 +220,7 @@ client.on('interactionCreate', async interaction => {
         if (state.flatmates.length === 0)
           return interaction.editReply({ content: '⚠️ Add flatmates first with `/addmember`!' });
         rotateChores();
-        const embed = new EmbedBuilder()
-          .setTitle('🔄 New Week — Chores Rotated!')
-          .setColor(0x57F287)
-          .setDescription(`Week of **${state.weekStart}**`)
-          .setTimestamp();
-        Object.entries(state.assignments).forEach(([chore, person]) =>
-          embed.addFields({ name: chore, value: `👤 **${person}**`, inline: true })
-        );
-        embed.setFooter({ text: `Rotation #${state.rotationIndex} • Use /checklist to tick off tasks` });
-        return interaction.editReply({ embeds: [embed] });
+        return interaction.editReply({ embeds: [buildRotateEmbed()] });
       }
 
       if (interaction.commandName === 'chores') {

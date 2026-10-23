@@ -35,6 +35,7 @@ const CHORES = {
 
 // ─── PERSISTENCE ─────────────────────────────────────────────────────────────
 const DATA_FILE = path.join(__dirname, 'data.json');
+const HISTORY_WEEKS = 4;
 
 const DEFAULT_STATE = {
   flatmates: [],
@@ -42,14 +43,18 @@ const DEFAULT_STATE = {
   completions: {},
   weekStart: null,
   rotationIndex: 0,
+  history: [],
 };
 
 function loadState() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf8');
-      const loaded = JSON.parse(raw);
-      return { ...DEFAULT_STATE, ...loaded };
+      const loaded = { ...DEFAULT_STATE, ...JSON.parse(raw) };
+      // Data saved before history was tracked: seed it with the current week
+      if (loaded.history.length === 0 && loaded.weekStart)
+        loaded.history = [{ weekStart: loaded.weekStart, assignments: loaded.assignments }];
+      return loaded;
     }
   } catch (err) {
     console.error('⚠️  Could not load data.json, starting fresh:', err.message);
@@ -82,6 +87,7 @@ function rotateChores() {
   });
 
   state.weekStart = new Date().toDateString();
+  state.history = [...state.history, { weekStart: state.weekStart, assignments: { ...state.assignments } }].slice(-HISTORY_WEEKS);
   state.rotationIndex = (state.rotationIndex + 1) % state.flatmates.length;
   saveState();
 }
@@ -192,21 +198,16 @@ client.on('interactionCreate', async interaction => {
       }
 
       if (interaction.commandName === 'history') {
-        if (state.flatmates.length === 0)
-          return interaction.editReply({ content: '👥 No flatmates added yet!' });
-        const choreNames = Object.keys(CHORES);
-        const lines = [];
-        for (let w = 3; w >= 0; w--) {
+        if (state.history.length === 0)
+          return interaction.editReply({ content: '📅 No rotations yet. Use `/rotate`!' });
+        const lines = state.history.map((week, i) => {
+          const w = state.history.length - 1 - i;
           const weekLabel = w === 0 ? '**This week**' : `**${w} week${w > 1 ? 's' : ''} ago**`;
-          const rotIdx = ((state.rotationIndex - 1) - w + state.flatmates.length * 10) % state.flatmates.length;
-          const pairs = choreNames.map((chore, i) => {
-            const person = state.flatmates[(i + rotIdx) % state.flatmates.length];
-            return `${chore} → ${person}`;
-          });
-          lines.push(`${weekLabel}\n${pairs.join('\n')}`);
-        }
+          const pairs = Object.entries(week.assignments).map(([chore, person]) => `${chore} → ${person}`);
+          return `${weekLabel} (${week.weekStart})\n${pairs.join('\n')}`;
+        });
         const embed = new EmbedBuilder()
-          .setTitle('📅 Rotation Schedule — Last 4 Weeks')
+          .setTitle(`📅 Rotation History — Last ${HISTORY_WEEKS} Weeks`)
           .setColor(0xEB459E)
           .setDescription(lines.join('\n\n'));
         return interaction.editReply({ embeds: [embed] });

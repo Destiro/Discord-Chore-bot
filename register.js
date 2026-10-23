@@ -10,6 +10,7 @@ const CHORES = {
   "🍳 Kitchen": [],
   "🌿 Outdoors": [],
   "🧹 Floors": [],
+  "🃏 Wildcard": [],
   "🚿 Bathrooms": [],
 };
 

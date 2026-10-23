@@ -3,12 +3,14 @@
     "Jackson",
     "Makyla",
     "Connor",
-    "Tom"
+    "Tom",
+    "Kieran"
   ],
   "assignments": {
-    "🍳 Kitchen": "Tom",
-    "🌿 Outdoors": "Jackson",
-    "🧹 Floors": "Makyla",
+    "🍳 Kitchen": "Makyla",
+    "🌿 Outdoors": "Kieran",
+    "🧹 Floors": "Tom",
+    "🃏 Wildcard": "Jackson",
     "🚿 Bathrooms": "Connor"
   },
   "completions": {
@@ -29,6 +31,9 @@
       "Clean dining room table": false,
       "Vacuum common areas": false
     },
+    "🃏 Wildcard": {
+      "Something extra the house needed (tap to describe what you did)": false
+    },
     "🚿 Bathrooms": {
       "Refill soap/toilet paper": false,
       "Wipe down toilet & seat": false,
@@ -39,6 +44,19 @@
       "Wipe down shower surfaces": false
     }
   },
-  "weekStart": "Wed May 6 2026",
-  "rotationIndex": 0
+  "weekStart": "Fri Oct 23 2026",
+  "rotationIndex": 1,
+  "history": [
+    {
+      "weekStart": "Fri Oct 23 2026",
+      "assignments": {
+        "🍳 Kitchen": "Makyla",
+        "🌿 Outdoors": "Kieran",
+        "🧹 Floors": "Tom",
+        "🃏 Wildcard": "Jackson",
+        "🚿 Bathrooms": "Connor"
+      }
+    }
+  ],
+  "notes": {}
 }

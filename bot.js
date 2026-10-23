@@ -4,8 +4,14 @@ const path = require('path');
 require('dotenv').config();
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-// Free-text chore: whoever is assigned describes what they did instead of ticking a fixed task
+const OUTDOORS = "🌿 Outdoors";
 const WILDCARD = "🃏 Wildcard";
+
+// Free-text chores: whoever is assigned describes what they did instead of just ticking a task
+const NOTE_CHORES = {
+  [OUTDOORS]: 'e.g. Mowed the front lawn, swept the paths',
+  [WILDCARD]: 'e.g. Fixed the leaky tap, cleaned out the fridge',
+};
 
 const CHORES = {
   "🍳 Kitchen": [
@@ -16,7 +22,7 @@ const CHORES = {
     "Wipe down appliances",
     "Replace soap/paper towels",
   ],
-  "🌿 Outdoors": [
+  [OUTDOORS]: [
     "Choose one: Mow lawns / Clean deck / Weeding & trimming bushes / Sweep paths & rake leaves / (bad weather) Mop floors",
   ],
   "🧹 Floors": [
@@ -304,10 +310,10 @@ client.on('interactionCreate', async interaction => {
 
       if (!state.completions[chore]) state.completions[chore] = {};
 
-      // Wildcard: ticking opens a text box; un-ticking clears what was written
-      if (chore === WILDCARD && !state.completions[chore][task])
-        return interaction.showModal(buildWildcardModal(state.notes[chore]));
-      if (chore === WILDCARD) delete state.notes[chore];
+      // Note chores: ticking opens a text box; un-ticking clears what was written
+      if (chore in NOTE_CHORES && !state.completions[chore][task])
+        return interaction.showModal(buildNoteModal(chore, state.notes[chore]));
+      if (chore in NOTE_CHORES) delete state.notes[chore];
 
       state.completions[chore][task] = !state.completions[chore][task];
       saveState();
@@ -328,35 +334,37 @@ client.on('interactionCreate', async interaction => {
   }
 
   // ── Modal submissions ──────────────────────────────────────────────────────
-  if (interaction.isModalSubmit() && interaction.customId === 'wildcard-note') {
+  if (interaction.isModalSubmit() && interaction.customId.startsWith('note||')) {
+    const chore = interaction.customId.split('||')[1];
+    if (!(chore in NOTE_CHORES)) return interaction.reply({ content: '⚠️ Unknown chore.', ephemeral: true });
     const note = interaction.fields.getTextInputValue('note').trim();
     if (!note) return interaction.reply({ content: '⚠️ Please describe what you did.', ephemeral: true });
-    if (!state.assignments[WILDCARD]) return interaction.reply({ content: '⚠️ No assignments yet. Use `/rotate` first!', ephemeral: true });
+    if (!state.assignments[chore]) return interaction.reply({ content: '⚠️ No assignments yet. Use `/rotate` first!', ephemeral: true });
 
-    state.notes[WILDCARD] = note;
-    state.completions[WILDCARD] = { [CHORES[WILDCARD][0]]: true };
+    const tasks = CHORES[chore];
+    state.notes[chore] = note;
+    state.completions[chore] = Object.fromEntries(tasks.map(t => [t, true]));
     saveState();
 
-    const tasks = CHORES[WILDCARD];
-    const embed = buildChecklistEmbed(WILDCARD, state.assignments[WILDCARD], tasks, 1)
+    const embed = buildChecklistEmbed(chore, state.assignments[chore], tasks, tasks.length)
       .setColor(0x57F287)
       .setFooter({ text: '🎉 All done! Great work!' });
-    return interaction.update({ embeds: [embed], components: buildChecklistButtons(WILDCARD, tasks) });
+    return interaction.update({ embeds: [embed], components: buildChecklistButtons(chore, tasks) });
   }
 });
 
-function buildWildcardModal(existing) {
+function buildNoteModal(chore, existing) {
   const input = new TextInputBuilder()
     .setCustomId('note')
     .setLabel('What did you do?')
     .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('e.g. Fixed the leaky tap, cleaned out the fridge')
+    .setPlaceholder(NOTE_CHORES[chore])
     .setMaxLength(500)
     .setRequired(true);
   if (existing) input.setValue(existing);
   return new ModalBuilder()
-    .setCustomId('wildcard-note')
-    .setTitle('Wildcard chore')
+    .setCustomId(`note||${chore}`)
+    .setTitle(chore)
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
@@ -371,7 +379,7 @@ function buildChecklistEmbed(chore, person, tasks, done) {
     .setColor(0x5865F2)
     .setDescription(`**Assigned to:** ${person}\n\n${lines.join('\n')}${note ? `\n\n📝 **What was done:** ${note}` : ''}`)
     .addFields({ name: 'Progress', value: `\`${getProgressBar(done, tasks.length)}\`` })
-    .setFooter({ text: chore === WILDCARD ? 'Tap the button below to describe what you did' : 'Tap a number below to tick off a task' });
+    .setFooter({ text: chore in NOTE_CHORES ? 'Tap the button below to describe what you did' : 'Tap a number below to tick off a task' });
 }
 
 function buildChecklistButtons(chore, tasks) {

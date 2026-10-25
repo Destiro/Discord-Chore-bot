@@ -85,7 +85,7 @@ GUILD_ID=your_server_id_here
 CHANNEL_ID=channel_for_weekly_rotation_posts
 ```
 
-`CHANNEL_ID` is the channel where the bot posts the weekly rotation. Chores rotate automatically every Monday at 9:00am New Zealand time while the bot is running. If the bot was offline at that time, it rotates when it next starts. Without `CHANNEL_ID` the rotation still happens, but it isn't announced.
+`CHANNEL_ID` is the channel where the bot posts the weekly rotation. Chores rotate automatically every Tuesday at 9:00am New Zealand time while the bot is running. If the bot was offline at that time, it rotates when it next starts. Without `CHANNEL_ID` the rotation still happens, but it isn't announced.
 
 ### Step 5 — Register Slash Commands (once only!)
 

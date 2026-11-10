@@ -19,9 +19,10 @@ A Discord bot that rotates chores among flatmates each week with interactive che
 | Command | Description |
 |---|---|
 | `/addmember <name>` | Add a flatmate to the rotation |
-| `/removemember <name>` | Remove a flatmate |
+| `/removemember <name>` | Remove a flatmate (with fewer flatmates than chores, 🃏 Wildcard is switched off) |
 | `/members` | List all flatmates |
 | `/rotate` | Assign chores for a new week |
+| `/assign <chore> <name>` | Change who has a chore this week (swaps with their current chore) |
 | `/chores` | Show this week's assignments + progress |
 | `/checklist <chore>` | Show tasks for a chore with tick-off buttons |
 | `/progress` | Show overall weekly completion |
@@ -85,7 +86,7 @@ GUILD_ID=your_server_id_here
 CHANNEL_ID=channel_for_weekly_rotation_posts
 ```
 
-`CHANNEL_ID` is the channel where the bot posts the weekly rotation. Chores rotate automatically every Tuesday at 9:00am New Zealand time while the bot is running. If the bot was offline at that time, it rotates when it next starts. Without `CHANNEL_ID` the rotation still happens, but it isn't announced.
+`CHANNEL_ID` is the channel where the bot posts the weekly rotation. Chores rotate automatically every Tuesday at 9:00am New Zealand time while the bot is running. If the bot was offline at that time, it rotates when it next starts. Each rotation moves everyone down one chore (the last chore wraps back to the first), and the announcement includes a ✅/❌ summary of the week that just ended. Without `CHANNEL_ID` the rotation still happens, but it isn't announced.
 
 ### Step 5 — Register Slash Commands (once only!)
 

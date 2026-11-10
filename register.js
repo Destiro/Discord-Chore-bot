@@ -52,6 +52,19 @@ const commands = [
     .setDescription('Assign chores for a new week'),
 
   new SlashCommandBuilder()
+    .setName('assign')
+    .setDescription("Change who has a chore this week (swaps with their current chore)")
+    .addStringOption(opt =>
+      opt.setName('chore')
+        .setDescription('Which chore?')
+        .setRequired(true)
+        .addChoices(...Object.keys(CHORES).map(c => ({ name: c, value: c })))
+    )
+    .addStringOption(opt =>
+      opt.setName('name').setDescription('Who should do it').setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
     .setName('progress')
     .setDescription('Show overall completion progress for this week'),
 

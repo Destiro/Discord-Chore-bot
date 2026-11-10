@@ -40,7 +40,7 @@ const CHORES = {
     "Clean sinks (remove mould by taps)",
     "Clean toilet bowl",
     "Replace toilet mat & towel",
-    "Clean bath",
+    "Clean bath (or tick if N/A)",
     "Wipe down shower surfaces",
   ],
 };
@@ -89,15 +89,36 @@ let state = loadState();
 console.log(`📂 Loaded state: ${state.flatmates.length} flatmates, week of ${state.weekStart || 'not set'}`);
 
 // ─── ROTATION LOGIC ──────────────────────────────────────────────────────────
+// Chores that are switched off (in this order) when there are fewer flatmates than chores
+const OPTIONAL_CHORES = [WILDCARD];
+
+function getActiveChores() {
+  const extra = Math.max(Object.keys(CHORES).length - state.flatmates.length, 0);
+  const dropped = OPTIONAL_CHORES.slice(0, extra);
+  return Object.keys(CHORES).filter(chore => !dropped.includes(chore));
+}
+
+// Keep this week's history entry in line with manual changes to the assignments
+function syncHistory() {
+  if (state.history.length) state.history[state.history.length - 1].assignments = { ...state.assignments };
+}
+
 function rotateChores() {
-  const choreNames = Object.keys(CHORES);
+  const choreNames = getActiveChores();
+  const current = choreNames.map(chore => state.assignments[chore]);
+  // Everyone moves down one chore (the last chore wraps to the first). Only possible when
+  // each flatmate currently has exactly one chore; otherwise fall back to the join order.
+  const canShift = state.flatmates.length === choreNames.length &&
+    state.flatmates.every(f => current.includes(f));
   state.assignments = {};
   state.completions = {};
   state.notes = {};
 
   choreNames.forEach((chore, i) => {
     const personIndex = ((i - state.rotationIndex) % state.flatmates.length + state.flatmates.length) % state.flatmates.length;
-    state.assignments[chore] = state.flatmates[personIndex];
+    state.assignments[chore] = canShift
+      ? current[(i - 1 + choreNames.length) % choreNames.length]
+      : state.flatmates[personIndex];
     state.completions[chore] = {};
     CHORES[chore].forEach(task => (state.completions[chore][task] = false));
   });
@@ -146,6 +167,28 @@ function buildRotateEmbed() {
   return embed;
 }
 
+// What got done in the week that's ending; call before rotateChores() resets it
+function buildSummaryEmbed() {
+  if (Object.keys(state.assignments).length === 0) return null;
+  const lines = Object.entries(state.assignments).map(([chore, person]) => {
+    const tasks = CHORES[chore] ?? [];
+    const done = tasks.filter(t => state.completions[chore]?.[t]).length;
+    const note = state.notes?.[chore];
+    const status = done === tasks.length ? '✅' : `❌ (${done}/${tasks.length})`;
+    return `${status} **${chore}** — ${person}${note ? `\n📝 ${note}` : ''}`;
+  });
+  return new EmbedBuilder()
+    .setTitle(`📋 Last Week's Chores — ${state.weekStart}`)
+    .setColor(0xFEE75C)
+    .setDescription(lines.join('\n'));
+}
+
+function buildRotateEmbeds() {
+  const summary = buildSummaryEmbed();
+  rotateChores();
+  return summary ? [summary, buildRotateEmbed()] : [buildRotateEmbed()];
+}
+
 async function checkAutoRotate() {
   try {
     const period = getPeriodKey();
@@ -158,7 +201,7 @@ async function checkAutoRotate() {
     }
     if (state.lastAutoRotate >= period || state.flatmates.length === 0) return;
 
-    rotateChores();
+    const embeds = buildRotateEmbeds();
     console.log(`[${new Date().toISOString()}] 🔄 Auto-rotated chores for period ${period}`);
 
     if (!process.env.CHANNEL_ID) {
@@ -166,7 +209,7 @@ async function checkAutoRotate() {
       return;
     }
     const channel = await client.channels.fetch(process.env.CHANNEL_ID);
-    await channel.send({ embeds: [buildRotateEmbed()] });
+    await channel.send({ embeds });
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Auto-rotate error:`, err);
   }
@@ -215,6 +258,15 @@ client.on('interactionCreate', async interaction => {
         if (state.flatmates.includes(name))
           return interaction.editReply({ content: `⚠️ **${name}** is already in the rotation!` });
         state.flatmates.push(name);
+        // A chore that was switched off (e.g. Wildcard) comes back on for the new flatmate
+        const reopened = getActiveChores().find(c => !state.assignments[c]);
+        if (reopened && Object.keys(state.assignments).length > 0) {
+          state.assignments[reopened] = name;
+          state.completions[reopened] = Object.fromEntries(CHORES[reopened].map(t => [t, false]));
+          syncHistory();
+          saveState();
+          return interaction.editReply({ content: `✅ Added **${name}** to the flat! ${reopened} is back on and **${name}** has it this week.` });
+        }
         saveState();
         return interaction.editReply({ content: `✅ Added **${name}** to the flat! Use \`/rotate\` to reassign chores.` });
       }
@@ -224,6 +276,27 @@ client.on('interactionCreate', async interaction => {
         if (!state.flatmates.includes(name))
           return interaction.editReply({ content: `⚠️ **${name}** isn't in the rotation.` });
         state.flatmates = state.flatmates.filter(f => f !== name);
+
+        // Switch off an optional chore (e.g. Wildcard); whoever had it takes over the removed person's chore
+        const freedChore = Object.keys(state.assignments).find(c => state.assignments[c] === name);
+        const active = getActiveChores();
+        const dropped = Object.keys(state.assignments).filter(c => !active.includes(c));
+        if (dropped.length > 0) {
+          const notes = dropped.map(chore => {
+            const person = state.assignments[chore];
+            delete state.assignments[chore];
+            delete state.completions[chore];
+            delete state.notes[chore];
+            if (freedChore && freedChore !== chore) {
+              state.assignments[freedChore] = person;
+              return `${chore} is off while there are ${state.flatmates.length} flatmates, so **${person}** takes over ${freedChore}.`;
+            }
+            return `${chore} is off while there are ${state.flatmates.length} flatmates.`;
+          });
+          syncHistory();
+          saveState();
+          return interaction.editReply({ content: `🗑️ Removed **${name}**. ${notes.join(' ')}` });
+        }
         saveState();
         return interaction.editReply({ content: `🗑️ Removed **${name}**. Use \`/rotate\` to reassign chores.` });
       }
@@ -231,8 +304,31 @@ client.on('interactionCreate', async interaction => {
       if (interaction.commandName === 'rotate') {
         if (state.flatmates.length === 0)
           return interaction.editReply({ content: '⚠️ Add flatmates first with `/addmember`!' });
-        rotateChores();
-        return interaction.editReply({ embeds: [buildRotateEmbed()] });
+        return interaction.editReply({ embeds: buildRotateEmbeds() });
+      }
+
+      if (interaction.commandName === 'assign') {
+        const chore = interaction.options.getString('chore');
+        const input = interaction.options.getString('name').trim();
+        const name = state.flatmates.find(f => f.toLowerCase() === input.toLowerCase());
+        if (!name)
+          return interaction.editReply({ content: `⚠️ **${input}** isn't in the rotation. Use \`/members\` to see who is.` });
+        if (Object.keys(state.assignments).length === 0)
+          return interaction.editReply({ content: '⚠️ No assignments yet. Use `/rotate` first!' });
+        if (!state.assignments[chore])
+          return interaction.editReply({ content: `⚠️ ${chore} is off while there are fewer flatmates than chores.` });
+
+        // Swap with whatever chore this person had, so everyone still has exactly one
+        const previous = state.assignments[chore];
+        const otherChore = Object.keys(state.assignments).find(c => c !== chore && state.assignments[c] === name);
+        state.assignments[chore] = name;
+        if (otherChore) state.assignments[otherChore] = previous;
+        syncHistory();
+        saveState();
+
+        const swapNote = otherChore && previous !== name ? ` **${previous}** now has ${otherChore}.` : '';
+        const pairs = Object.entries(state.assignments).map(([c, p]) => `${c} → ${p}`).join('\n');
+        return interaction.editReply({ content: `✅ **${name}** now has ${chore}.${swapNote}\n\n${pairs}` });
       }
 
       if (interaction.commandName === 'chores') {
@@ -288,6 +384,8 @@ client.on('interactionCreate', async interaction => {
 
       if (interaction.commandName === 'checklist') {
         const chore = interaction.options.getString('chore');
+        if (!state.assignments[chore] && Object.keys(state.assignments).length > 0)
+          return interaction.editReply({ content: `⚠️ ${chore} is off while there are fewer flatmates than chores.` });
         if (!state.assignments[chore])
           return interaction.editReply({ content: '⚠️ No assignments yet. Use `/rotate` first!' });
         const person = state.assignments[chore];

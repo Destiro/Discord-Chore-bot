@@ -154,6 +154,32 @@ If you add or rename chore categories, re-run `node register.js` once afterwards
 
 ---
 
+## ☁️ Updating the Bot on Your Server (Oracle Cloud)
+
+Merge your changes into `main` on GitHub first, then SSH into the server and run:
+
+```bash
+cd ~/Discord-Chore-bot
+cp data.json ~/data.backup.json     # back up the live data
+git stash                           # set your live data.json aside
+git checkout main
+git pull
+git stash pop                       # put your data.json back
+npm install                         # only needed if dependencies changed
+pm2 restart chorebot
+pm2 logs chorebot --lines 20        # look for "Logged in"
+```
+
+- If `git stash pop` reports a conflict in `data.json`, restore your data with `cp ~/data.backup.json data.json`.
+- `.env` isn't in git, so pulling never touches your token or IDs.
+- Run `node register.js` again only if the slash commands changed (new command or chore added or renamed).
+- To replace the server's `data.json` with the one on your PC, stop the bot (`pm2 stop chorebot`) before copying it, or the bot will overwrite it from memory:
+  ```powershell
+  scp -i C:\path\to\your-key.key .\data.json ubuntu@<vm-ip>:~/Discord-Chore-bot/data.json
+  ```
+
+---
+
 ## 💡 Tips
 
 - Run `/rotate` every Monday to reset assignments for the week

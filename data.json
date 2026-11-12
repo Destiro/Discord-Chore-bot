@@ -29,7 +29,8 @@
       "Dust common areas": false,
       "Pack away forgotten cans/kitchenware": false,
       "Clean dining room table": false,
-      "Vacuum common areas": false
+      "Vacuum common areas": false,
+      "Empty the vacuum dust bin": false
     },
     "🃏 Wildcard": {
       "Something extra the house needed (tap to describe what you did)": false

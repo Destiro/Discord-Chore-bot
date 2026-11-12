@@ -36,6 +36,7 @@ const CHORES = {
     "Pack away forgotten cans/kitchenware",
     "Clean dining room table",
     "Vacuum common areas",
+    "Empty the vacuum dust bin",
   ],
   [WILDCARD]: [
     "Something extra the house needed (tap to describe what you did)",

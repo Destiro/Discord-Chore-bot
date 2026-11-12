@@ -6,6 +6,12 @@ require('dotenv').config();
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const OUTDOORS = "🌿 Outdoors";
 const WILDCARD = "🃏 Wildcard";
+const BATHROOMS = "🚿 Bathrooms";
+
+// The ensuite has its own checklist (the main bathroom's minus the tasks it doesn't have).
+// Doing either bathroom counts as the Bathrooms chore for the week.
+const ENSUITE = "🚿 Bathrooms — Ensuite";
+const ENSUITE_SKIPPED_TASKS = ["Clean bath"];
 
 // Free-text chores: whoever is assigned describes what they did instead of just ticking a task
 const NOTE_CHORES = {
@@ -34,13 +40,13 @@ const CHORES = {
   [WILDCARD]: [
     "Something extra the house needed (tap to describe what you did)",
   ],
-  "🚿 Bathrooms": [
+  [BATHROOMS]: [
     "Refill soap/toilet paper",
     "Wipe down toilet & seat",
     "Clean sinks (remove mould by taps)",
     "Clean toilet bowl",
     "Replace toilet mat & towel",
-    "Clean bath (or tick if N/A)",
+    "Clean bath",
     "Wipe down shower surfaces",
   ],
 };
@@ -88,6 +94,33 @@ function saveState() {
 let state = loadState();
 console.log(`📂 Loaded state: ${state.flatmates.length} flatmates, week of ${state.weekStart || 'not set'}`);
 
+// ─── CHECKLIST HELPERS ───────────────────────────────────────────────────────
+// Tasks for a checklist (the ensuite is a checklist but not a chore of its own)
+function getTasks(chore) {
+  return chore === ENSUITE
+    ? CHORES[BATHROOMS].filter(t => !ENSUITE_SKIPPED_TASKS.includes(t))
+    : CHORES[chore];
+}
+
+// The chore (and so the assignment) a checklist belongs to
+function choreOf(chore) {
+  return chore === ENSUITE ? BATHROOMS : chore;
+}
+
+function countDone(chore) {
+  return getTasks(chore).filter(t => state.completions[chore]?.[t]).length;
+}
+
+// Progress towards a chore; Bathrooms is complete once either bathroom is finished
+function getChoreProgress(chore) {
+  const total = CHORES[chore].length;
+  if (chore !== BATHROOMS) return { done: countDone(chore), total };
+  const mainDone = countDone(BATHROOMS);
+  const ensuiteDone = countDone(ENSUITE);
+  const complete = mainDone === total || ensuiteDone === getTasks(ENSUITE).length;
+  return { done: complete ? total : Math.max(mainDone, ensuiteDone), total };
+}
+
 // ─── ROTATION LOGIC ──────────────────────────────────────────────────────────
 // Chores that are switched off (in this order) when there are fewer flatmates than chores
 const OPTIONAL_CHORES = [WILDCARD];
@@ -122,6 +155,7 @@ function rotateChores() {
     state.completions[chore] = {};
     CHORES[chore].forEach(task => (state.completions[chore][task] = false));
   });
+  state.completions[ENSUITE] = Object.fromEntries(getTasks(ENSUITE).map(t => [t, false]));
 
   state.weekStart = new Date().toDateString();
   state.lastAutoRotate = getPeriodKey();
@@ -171,10 +205,9 @@ function buildRotateEmbed() {
 function buildSummaryEmbed() {
   if (Object.keys(state.assignments).length === 0) return null;
   const lines = Object.entries(state.assignments).map(([chore, person]) => {
-    const tasks = CHORES[chore] ?? [];
-    const done = tasks.filter(t => state.completions[chore]?.[t]).length;
+    const { done, total } = getChoreProgress(chore);
     const note = state.notes?.[chore];
-    const status = done === tasks.length ? '✅' : `❌ (${done}/${tasks.length})`;
+    const status = done === total ? '✅' : `❌ (${done}/${total})`;
     return `${status} **${chore}** — ${person}${note ? `\n📝 ${note}` : ''}`;
   });
   return new EmbedBuilder()
@@ -339,9 +372,8 @@ client.on('interactionCreate', async interaction => {
           .setColor(0xFEE75C)
           .setFooter({ text: 'Use /checklist to see tasks for your chore' });
         Object.entries(state.assignments).forEach(([chore, person]) => {
-          const tasks = CHORES[chore];
-          const done = tasks.filter(t => state.completions[chore]?.[t]).length;
-          embed.addFields({ name: `${chore} → ${person}`, value: `\`${getProgressBar(done, tasks.length)}\``, inline: false });
+          const { done, total } = getChoreProgress(chore);
+          embed.addFields({ name: `${chore} → ${person}`, value: `\`${getProgressBar(done, total)}\``, inline: false });
         });
         return interaction.editReply({ embeds: [embed] });
       }
@@ -351,11 +383,10 @@ client.on('interactionCreate', async interaction => {
           return interaction.editReply({ content: '📋 No chores assigned yet!' });
         let totalTasks = 0, totalDone = 0;
         const lines = Object.entries(state.assignments).map(([chore, person]) => {
-          const tasks = CHORES[chore];
-          const done = tasks.filter(t => state.completions[chore]?.[t]).length;
-          totalTasks += tasks.length;
+          const { done, total } = getChoreProgress(chore);
+          totalTasks += total;
           totalDone += done;
-          return `${done === tasks.length ? '✅' : '🔄'} **${chore}** (${person})\n\`${getProgressBar(done, tasks.length)}\``;
+          return `${done === total ? '✅' : '🔄'} **${chore}** (${person})\n\`${getProgressBar(done, total)}\``;
         });
         const embed = new EmbedBuilder()
           .setTitle(`📊 Weekly Progress — ${state.weekStart}`)
@@ -389,8 +420,16 @@ client.on('interactionCreate', async interaction => {
         if (!state.assignments[chore])
           return interaction.editReply({ content: '⚠️ No assignments yet. Use `/rotate` first!' });
         const person = state.assignments[chore];
+        if (chore === BATHROOMS)
+          return interaction.editReply({
+            content: `🚿 Which bathroom is **${person}** ticking off?`,
+            components: [new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId('bathroom||main').setLabel('Main bathroom').setStyle(ButtonStyle.Primary),
+              new ButtonBuilder().setCustomId('bathroom||ensuite').setLabel('Ensuite').setStyle(ButtonStyle.Primary),
+            )],
+          });
         const tasks = CHORES[chore];
-        const done = tasks.filter(t => state.completions[chore]?.[t]).length;
+        const done = countDone(chore);
         return interaction.editReply({
           embeds: [buildChecklistEmbed(chore, person, tasks, done)],
           components: buildChecklistButtons(chore, tasks),
@@ -406,11 +445,22 @@ client.on('interactionCreate', async interaction => {
   // ── Button interactions ────────────────────────────────────────────────────
   if (interaction.isButton()) {
     const [action, chore, taskIndex] = interaction.customId.split('||');
+    if (action === 'bathroom') {
+      const checklist = chore === 'ensuite' ? ENSUITE : BATHROOMS;
+      if (!state.assignments[BATHROOMS]) return interaction.reply({ content: '⚠️ No assignments yet. Use `/rotate` first!', ephemeral: true });
+      if (!state.completions[checklist]) state.completions[checklist] = {};
+      const tasks = getTasks(checklist);
+      return interaction.update({
+        content: null,
+        embeds: [buildChecklistEmbed(checklist, state.assignments[BATHROOMS], tasks, countDone(checklist))],
+        components: buildChecklistButtons(checklist, tasks),
+      });
+    }
     if (action === 'toggle') {
-      const task = CHORES[chore]?.[parseInt(taskIndex)];
+      const task = getTasks(chore)?.[parseInt(taskIndex)];
       if (!task) return interaction.reply({ content: '⚠️ Unknown task.', ephemeral: true });
 
-      if (!state.assignments[chore]) return interaction.reply({ content: '⚠️ No assignments yet. Use `/rotate` first!', ephemeral: true });
+      if (!state.assignments[choreOf(chore)]) return interaction.reply({ content: '⚠️ No assignments yet. Use `/rotate` first!', ephemeral: true });
 
       if (!state.completions[chore]) state.completions[chore] = {};
 
@@ -422,9 +472,9 @@ client.on('interactionCreate', async interaction => {
       state.completions[chore][task] = !state.completions[chore][task];
       saveState();
 
-      const person = state.assignments[chore];
-      const tasks = CHORES[chore];
-      const done = tasks.filter(t => state.completions[chore]?.[t]).length;
+      const person = state.assignments[choreOf(chore)];
+      const tasks = getTasks(chore);
+      const done = countDone(chore);
       const embed = buildChecklistEmbed(chore, person, tasks, done);
       const rows = buildChecklistButtons(chore, tasks);
 
@@ -479,11 +529,13 @@ function buildChecklistEmbed(chore, person, tasks, done) {
     return `${checked ? '✅' : '⬜'} ${checked ? `~~${task}~~` : task}`;
   });
   return new EmbedBuilder()
-    .setTitle(chore)
+    .setTitle(chore === BATHROOMS ? `${BATHROOMS} — Main bathroom` : chore)
     .setColor(0x5865F2)
     .setDescription(`**Assigned to:** ${person}\n\n${lines.join('\n')}${note ? `\n\n📝 **What was done:** ${note}` : ''}`)
     .addFields({ name: 'Progress', value: `\`${getProgressBar(done, tasks.length)}\`` })
-    .setFooter({ text: chore in NOTE_CHORES ? 'Tap the button below to describe what you did' : 'Tap a number below to tick off a task' });
+    .setFooter({ text: chore in NOTE_CHORES ? 'Tap the button below to describe what you did'
+      : choreOf(chore) === BATHROOMS ? 'Tap a number to tick off a task • Finishing either bathroom completes the chore'
+      : 'Tap a number below to tick off a task' });
 }
 
 function buildChecklistButtons(chore, tasks) {

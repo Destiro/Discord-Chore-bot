@@ -7,11 +7,11 @@
     "Kieran"
   ],
   "assignments": {
-    "🍳 Kitchen": "Makyla",
-    "🌿 Outdoors": "Kieran",
-    "🧹 Floors": "Tom",
-    "🃏 Wildcard": "Jackson",
-    "🚿 Bathrooms": "Connor"
+    "🍳 Kitchen": "Tom",
+    "🌿 Outdoors": "Jackson",
+    "🧹 Floors": "Connor",
+    "🃏 Wildcard": "Makyla",
+    "🚿 Bathrooms": "Kieran"
   },
   "completions": {
     "🍳 Kitchen": {
@@ -50,11 +50,11 @@
     {
       "weekStart": "Fri Oct 23 2026",
       "assignments": {
-        "🍳 Kitchen": "Makyla",
-        "🌿 Outdoors": "Kieran",
-        "🧹 Floors": "Tom",
-        "🃏 Wildcard": "Jackson",
-        "🚿 Bathrooms": "Connor"
+        "🍳 Kitchen": "Tom",
+        "🌿 Outdoors": "Jackson",
+        "🧹 Floors": "Connor",
+        "🃏 Wildcard": "Makyla",
+        "🚿 Bathrooms": "Kieran"
       }
     }
   ],
